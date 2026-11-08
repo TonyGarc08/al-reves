@@ -280,11 +280,12 @@ function play(buf) {
   playing.buffer = buf; playing.connect(ctx.destination); playing.start();
 }
 async function store(slot, blob) {
+  if (slot === "original") $("#idea").textContent = ""; // hide the secret word as soon as recording ends
   try {
     const normal = await audioCtx().decodeAudioData(await blob.arrayBuffer());
     buffers[slot] = { normal, reversed: reverse(normal) };
     $("#err").textContent = "";
-    if (slot === "original") { $("#idea").textContent = ""; unlock("#s2"); unlock("#s3"); } else unlock("#s4");
+    if (slot === "original") { unlock("#s2"); unlock("#s3"); } else unlock("#s4");
   } catch { $("#err").textContent = "No pude leer ese audio. Intenta grabarlo otra vez."; }
 }
 const unlock = id => $(id).classList.remove("off");
@@ -299,7 +300,7 @@ function buildRecorder(box) {
   if (!micOk) fallback();
   file.onchange = () => { if (file.files[0]) { store(slot, file.files[0]); label.firstChild.textContent = "🎙️ Volver a grabar"; } file.value = ""; };
   btn.onclick = async () => {
-    if (recorder?.state === "recording") return recorder.stop();
+    if (recorder?.state === "recording") { if (slot === "original") $("#idea").textContent = ""; return recorder.stop(); }
     try { audioCtx(); stream ??= await navigator.mediaDevices.getUserMedia({ audio: true }); }
     catch { fallback(); $("#err").textContent = "El micrófono está bloqueado aquí; usa la grabadora del celular."; return; }
     const chunks = [];
