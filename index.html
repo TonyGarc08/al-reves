@@ -121,9 +121,13 @@
       <h2>Volteamos tu imitación… ¿adivinas?</h2>
       <button data-play="copia" data-rev="1">▶️ Escuchar imitación volteada</button>
       <button data-play="original" data-rev="0">🙊 Revelar el original</button>
-      <div class="row">
+      <div class="row" id="judge">
         <button class="ok" id="hit">✅ Adivinó</button>
         <button id="miss">❌ No adivinó</button>
+      </div>
+      <div id="result" hidden>
+        <p class="idea" id="resultText"></p>
+        <button class="big" id="next">➡️ Siguiente turno</button>
       </div>
       <p class="hint">Adivinar: +2 a quien imita y +1 a quien dijo la palabra.</p>
     </section>
@@ -227,9 +231,18 @@ function newRound(advance = true) {
 }
 $("#newCat").onclick = () => { S.cat = pick(S.cats); $("#cat").textContent = S.cat; $("#idea").textContent = ""; save(); };
 $("#ideaBtn").onclick = () => $("#idea").textContent = pick(IDEAS[S.cat] || ["Lo que quieras"]);
-$("#hit").onclick = () => { const { speaker, imitator } = current(); S.scores[imitator] += 2; S.scores[speaker] += 1; newRound(); };
-$("#miss").onclick = () => newRound();
-$("#skip").onclick = () => newRound();
+function judge(hit) {
+  if ($("#judge").hidden) return; // already scored this round
+  const { speaker, imitator } = current();
+  if (hit) { S.scores[imitator] += 2; S.scores[speaker] += 1; save(); renderScores(); }
+  $("#resultText").textContent = hit ? `✅ +2 ${imitator} · +1 ${speaker}` : "❌ Nadie suma esta vez";
+  $("#judge").hidden = true; $("#result").hidden = false;
+}
+function nextTurn() { newRound(); scrollTo({ top: 0, behavior: "smooth" }); }
+$("#hit").onclick = () => judge(true);
+$("#miss").onclick = () => judge(false);
+$("#next").onclick = nextTurn;
+$("#skip").onclick = nextTurn;
 // two taps to restart, so a stray tap doesn't wipe the scores
 const RESTART = "🔄 Reiniciar juego";
 let restartTimer;
@@ -315,6 +328,7 @@ function resetAudio() {
   try { playing?.stop(); } catch {}
   if (recorder?.state === "recording") recorder.stop();
   for (const k in buffers) delete buffers[k];
+  $("#judge").hidden = false; $("#result").hidden = true;
   ["#s2", "#s3", "#s4"].forEach(id => $(id).classList.add("off"));
   $$(".recorder").forEach(buildRecorder);
 }
