@@ -135,6 +135,7 @@
         <button id="skip">⏭️ Saltar turno</button>
         <button id="toSetup">⚙️ Ajustes</button>
       </div>
+      <button id="restart">🔄 Reiniciar juego</button>
     </section>
     <p class="err" id="err"></p>
   </div>
@@ -229,6 +230,22 @@ $("#ideaBtn").onclick = () => $("#idea").textContent = pick(IDEAS[S.cat] || ["Lo
 $("#hit").onclick = () => { const { speaker, imitator } = current(); S.scores[imitator] += 2; S.scores[speaker] += 1; newRound(); };
 $("#miss").onclick = () => newRound();
 $("#skip").onclick = () => newRound();
+// two taps to restart, so a stray tap doesn't wipe the scores
+const RESTART = "🔄 Reiniciar juego";
+let restartTimer;
+$("#restart").onclick = e => {
+  const b = e.currentTarget;
+  clearTimeout(restartTimer);
+  if (!b.dataset.sure) {
+    b.dataset.sure = 1; b.textContent = "¿Seguro? Se borran los puntos. Toca otra vez";
+    restartTimer = setTimeout(() => { delete b.dataset.sure; b.textContent = RESTART; }, 4000);
+    return;
+  }
+  delete b.dataset.sure; b.textContent = RESTART;
+  S.scores = {}; S.turn = 0; save();
+  resetAudio();
+  $("#game").hidden = true; $("#setup").hidden = false; renderPlayers();
+};
 
 function renderScores() {
   const ps = players(), top = Math.max(...ps.map(p => S.scores[p] || 0));
@@ -267,7 +284,7 @@ async function store(slot, blob) {
     const normal = await audioCtx().decodeAudioData(await blob.arrayBuffer());
     buffers[slot] = { normal, reversed: reverse(normal) };
     $("#err").textContent = "";
-    if (slot === "original") { unlock("#s2"); unlock("#s3"); } else unlock("#s4");
+    if (slot === "original") { $("#idea").textContent = ""; unlock("#s2"); unlock("#s3"); } else unlock("#s4");
   } catch { $("#err").textContent = "No pude leer ese audio. Intenta grabarlo otra vez."; }
 }
 const unlock = id => $(id).classList.remove("off");
