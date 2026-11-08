@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Al Revés</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@400;700;900&display=swap">
+<style>
+  /* Layout: one phone column, a cassette-label header, steps stacked as tape cards */
+  :root {
+    --bg: #2b1d3f; --card: #3b2a55; --line: #5a4680; --fg: #fff6e8; --muted: #c8b8e0;
+    --rec: #ff6b4a; --ok: #4fd1a5; --no: #8a7aa6; --tape: #ffd166;
+    --display: "Bungee", "Arial Black", sans-serif; --body: "Nunito", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { background: var(--bg); color: var(--fg); }
+  body { font: 17px/1.45 var(--body); padding-block: 16px 40px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width: 480px; margin: 0 auto; display: grid; gap: 14px; }
+  header { text-align: center; }
+  h1 { font: 2.4rem/1 var(--display); margin: 8px 0 4px; color: var(--tape); }
+  h1 span { display: inline-block; transform: scaleX(-1); }
+  .sub { color: var(--muted); margin: 0; }
+  section { background: var(--card); border-radius: 18px; padding: 16px; display: grid; gap: 10px; }
+  section.off { opacity: .35; pointer-events: none; }
+  .step { font: .75rem var(--display); color: var(--tape); letter-spacing: .06em; }
+  h2 { margin: 0; font-size: 1.15rem; font-weight: 900; text-wrap: balance; }
+  button, .filebtn { font: 700 1rem var(--body); border: 0; border-radius: 14px; padding: 14px; width: 100%;
+         background: var(--line); color: var(--fg); cursor: pointer; text-align: center; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--tape); outline-offset: 2px; }
+  button:disabled { opacity: .4; cursor: default; }
+  .rec { background: var(--rec); }
+  .rec.on { background: #c0392b; animation: pulse 1s infinite; }
+  .ok { background: var(--ok); color: #13261f; }
+  .big { font: 1.05rem var(--display); background: var(--tape); color: #2b1d3f; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; min-width: 0; }
+  @keyframes pulse { 50% { opacity: .7; } }
+  @media (prefers-reduced-motion: reduce) { .rec.on { animation: none; } }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { width: auto; padding: 8px 12px; border-radius: 999px; font-size: .9rem; background: transparent; border: 2px solid var(--line); }
+  .chip[aria-pressed="true"] { background: var(--tape); color: #2b1d3f; border-color: var(--tape); }
+  .players { display: grid; gap: 6px; }
+  .player { display: flex; gap: 8px; align-items: center; }
+  .player input { flex: 1; min-width: 0; font: inherit; padding: 10px 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--fg); }
+  .player button { width: 44px; padding: 10px 0; }
+  .turn { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: center; }
+  .turn div { background: var(--bg); border-radius: 12px; padding: 8px; min-width: 0; overflow-wrap: anywhere; }
+  .turn small { display: block; color: var(--muted); font-size: .75rem; }
+  .turn b { font-size: 1.1rem; }
+  .cat { font: 1.3rem var(--display); text-align: center; color: var(--tape); margin: 0; }
+  .idea { text-align: center; font-size: 1.3rem; font-weight: 900; margin: 0; min-height: 1.5em; }
+  .hint { color: var(--muted); font-size: .85rem; margin: 0; text-align: center; }
+  .scores { display: grid; gap: 6px; }
+  .score { display: flex; justify-content: space-between; background: var(--bg); padding: 8px 12px; border-radius: 10px; font-variant-numeric: tabular-nums; }
+  .score.lead b { color: var(--tape); }
+  .err { color: #ffb4a8; text-align: center; margin: 0; }
+  input[type=file] { display: none; }
+</style>
+
+<main>
+  <header>
+    <h1>AL <span>REVÉS</span></h1>
+    <p class="sub">Uno dice algo, suena al revés, otro lo imita… y al voltearlo hay que adivinar qué era.</p>
+  </header>
+
+  <!-- SETUP -->
+  <div id="setup" style="display:grid;gap:14px">
+    <section>
+      <div class="step">JUGADORES</div>
+      <div class="players" id="players"></div>
+      <button id="addPlayer">+ Agregar jugador</button>
+    </section>
+    <section>
+      <div class="step">CATEGORÍAS</div>
+      <p class="hint">Toca las que quieran jugar.</p>
+      <div class="chips" id="cats"></div>
+    </section>
+    <button class="big" id="start">¡A jugar!</button>
+    <p class="err" id="setupErr"></p>
+  </div>
+
+  <!-- GAME -->
+  <div id="game" hidden style="display:grid;gap:14px">
+    <section>
+      <div class="turn">
+        <div><small>Dice la palabra</small><b id="speaker"></b></div>
+        <div><small>Imita y adivina</small><b id="imitator"></b></div>
+      </div>
+      <p class="cat" id="cat"></p>
+      <button id="newCat">🎲 Otra categoría</button>
+    </section>
+
+    <section id="s1">
+      <div class="step">PASO 1 · <span class="who-s"></span> EN SECRETO</div>
+      <h2>Graba una palabra o frase de la categoría</h2>
+      <button id="ideaBtn">💡 No se me ocurre nada, dame una idea</button>
+      <p class="idea" id="idea"></p>
+      <div class="recorder" data-slot="original"></div>
+    </section>
+
+    <section id="s2" class="off">
+      <div class="step">PASO 2 · <span class="who-i"></span></div>
+      <h2>Escucha el audio al revés las veces que quieras</h2>
+      <button data-play="original" data-rev="1">▶️ Reproducir al revés</button>
+    </section>
+
+    <section id="s3" class="off">
+      <div class="step">PASO 3 · <span class="who-i"></span></div>
+      <h2>Imita lo que escuchaste, tal cual, al revés</h2>
+      <div class="recorder" data-slot="copia"></div>
+    </section>
+
+    <section id="s4" class="off">
+      <div class="step">PASO 4 · ¿QUÉ DIJO?</div>
+      <h2>Volteamos tu imitación… ¿adivinas?</h2>
+      <button data-play="copia" data-rev="1">▶️ Escuchar imitación volteada</button>
+      <button data-play="original" data-rev="0">🙊 Revelar el original</button>
+      <div class="row">
+        <button class="ok" id="hit">✅ Adivinó</button>
+        <button id="miss">❌ No adivinó</button>
+      </div>
+      <p class="hint">Adivinar: +2 a quien imita y +1 a quien dijo la palabra.</p>
+    </section>
+
+    <section>
+      <div class="step">MARCADOR</div>
+      <div class="scores" id="scores"></div>
+      <div class="row">
+        <button id="skip">⏭️ Saltar turno</button>
+        <button id="toSetup">⚙️ Ajustes</button>
+      </div>
+    </section>
+    <p class="err" id="err"></p>
+  </div>
+</main>
+
+<script>
+const IDEAS = {
+  "Disney": ["El Rey León","La Sirenita","Aladdín","Frozen","Encanto","Moana","La Bella y la Bestia","Mulán","Blancanieves","Cenicienta","Enredados","Hércules","Pocahontas","Zootopia","Lilo y Stitch","Peter Pan","Dumbo","Bambi"],
+  "Pixar": ["Toy Story","Buscando a Nemo","Monsters Inc","Los Increíbles","Cars","Ratatouille","Up","Wall-E","Coco","Intensa-Mente","Valiente","Luca","Soul","Bichos","Elementos","Red"],
+  "Superhéroes": ["Spider-Man","Batman","Superman","Iron Man","Hulk","Thor","Capitán América","Wonder Woman","Black Panther","Deadpool","Wolverine","Flash","Aquaman","Groot"],
+  "Deportes": ["Fútbol","Básquetbol","Béisbol","Tenis","Natación","Box","Voleibol","Ciclismo","Golf","Atletismo","Karate","Surf","Patinaje","Lucha libre","Ajedrez"],
+  "Comida": ["Tacos al pastor","Pizza","Hamburguesa","Chilaquiles","Pozole","Sushi","Enchiladas","Tamales","Guacamole","Quesadilla","Espagueti","Hot dog","Churros","Elote","Mole"],
+  "Animales": ["Elefante","Jirafa","Cocodrilo","Pingüino","Mariposa","Hipopótamo","Tiburón","Ajolote","Murciélago","Canguro","Tortuga","Gallina","Ornitorrinco","Flamingo"],
+  "Canciones": ["Cumpleaños feliz","La cucaracha","Despacito","Cielito lindo","Macarena","Bésame mucho","Las mañanitas","La bamba","Baby shark","Pollito pío"],
+  "Famosos": ["Shakira","Bad Bunny","Messi","Cristiano Ronaldo","Taylor Swift","Luis Miguel","Karol G","Peso Pluma","Salma Hayek","Guillermo del Toro","Checo Pérez","Thalía"],
+  "Países": ["México","Argentina","Japón","Australia","Canadá","Brasil","Alemania","Egipto","Colombia","Italia","Francia","Perú","España","Chile"],
+  "Caricaturas": ["Bob Esponja","Los Simpson","Pokémon","Dragon Ball","Scooby-Doo","Phineas y Ferb","Hora de aventura","Tom y Jerry","Los Picapiedra","El Chavo animado","Bluey","Peppa Pig"],
+  "Videojuegos": ["Mario Bros","Minecraft","Fortnite","Zelda","Pac-Man","Tetris","Sonic","Among Us","Roblox","Call of Duty","Kirby"],
+  "Marcas": ["Coca-Cola","McDonald's","Nike","Adidas","Bimbo","Apple","Samsung","Oxxo","Netflix","Gansito","Sabritas"],
+  "Profesiones": ["Doctor","Bombero","Astronauta","Maestra","Policía","Chef","Arquitecto","Veterinaria","Piloto","Dentista","Payaso"],
+  "Frases": ["Ya vámonos","Te lo dije","No manches","¿Qué onda?","Ahorita vengo","Feliz cumpleaños","Me lleva","Buenos días","Échale ganas"],
+  "Trabalenguas": ["Tres tristes tigres","Pablito clavó un clavito","Erre con erre cigarro","El cielo está enladrillado","Compadre cómprame un coco"],
+};
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+// ---- state (scores kept in localStorage so an accidental reload doesn't lose the party) ----
+let S = { players: ["Jugador 1", "Jugador 2"], cats: ["Disney", "Pixar", "Deportes"], scores: {}, turn: 0, cat: "" };
+try { Object.assign(S, JSON.parse(localStorage.getItem("alreves") || "{}")); } catch {}
+const save = () => { try { localStorage.setItem("alreves", JSON.stringify(S)); } catch {} };
+
+// ---- setup screen ----
+function renderPlayers() {
+  $("#players").innerHTML = "";
+  S.players.forEach((name, i) => {
+    const row = document.createElement("div");
+    row.className = "player";
+    row.innerHTML = `<input id="p${i}" aria-label="Jugador ${i + 1}" maxlength="20"><button aria-label="Quitar jugador">✕</button>`;
+    row.querySelector("input").value = name;
+    row.querySelector("input").oninput = e => { S.players[i] = e.target.value; save(); };
+    row.querySelector("button").onclick = () => { S.players.splice(i, 1); save(); renderPlayers(); };
+    $("#players").append(row);
+  });
+}
+$("#addPlayer").onclick = () => { S.players.push("Jugador " + (S.players.length + 1)); save(); renderPlayers(); };
+
+Object.keys(IDEAS).forEach(c => {
+  const b = document.createElement("button");
+  b.className = "chip"; b.textContent = c;
+  b.setAttribute("aria-pressed", S.cats.includes(c));
+  b.onclick = () => {
+    S.cats = S.cats.includes(c) ? S.cats.filter(x => x !== c) : [...S.cats, c];
+    b.setAttribute("aria-pressed", S.cats.includes(c)); save();
+  };
+  $("#cats").append(b);
+});
+
+function players() { return S.players.map(p => p.trim()).filter(Boolean); }
+
+$("#start").onclick = () => {
+  const ps = players();
+  if (ps.length < 2) return $("#setupErr").textContent = "Necesitan al menos 2 jugadores.";
+  if (!S.cats.length) return $("#setupErr").textContent = "Elige al menos una categoría.";
+  $("#setupErr").textContent = "";
+  ps.forEach(p => S.scores[p] ??= 0);
+  $("#setup").hidden = true; $("#game").hidden = false;
+  newRound(false);
+};
+$("#toSetup").onclick = () => { $("#game").hidden = true; $("#setup").hidden = false; renderPlayers(); };
+
+// ---- rounds & scoring ----
+function current() {
+  const ps = players();
+  return { speaker: ps[S.turn % ps.length], imitator: ps[(S.turn + 1) % ps.length] };
+}
+function newRound(advance = true) {
+  if (advance) S.turn++;
+  S.cat = pick(S.cats);
+  save();
+  resetAudio();
+  const { speaker, imitator } = current();
+  $("#speaker").textContent = speaker; $("#imitator").textContent = imitator;
+  $$(".who-s").forEach(e => e.textContent = speaker.toUpperCase());
+  $$(".who-i").forEach(e => e.textContent = imitator.toUpperCase());
+  $("#cat").textContent = S.cat;
+  $("#idea").textContent = "";
+  renderScores();
+}
+$("#newCat").onclick = () => { S.cat = pick(S.cats); $("#cat").textContent = S.cat; $("#idea").textContent = ""; save(); };
+$("#ideaBtn").onclick = () => $("#idea").textContent = pick(IDEAS[S.cat] || ["Lo que quieras"]);
+$("#hit").onclick = () => { const { speaker, imitator } = current(); S.scores[imitator] += 2; S.scores[speaker] += 1; newRound(); };
+$("#miss").onclick = () => newRound();
+$("#skip").onclick = () => newRound();
+
+function renderScores() {
+  const ps = players(), top = Math.max(...ps.map(p => S.scores[p] || 0));
+  $("#scores").innerHTML = "";
+  ps.slice().sort((a, b) => (S.scores[b] || 0) - (S.scores[a] || 0)).forEach(p => {
+    const d = document.createElement("div");
+    d.className = "score" + (top > 0 && S.scores[p] === top ? " lead" : "");
+    d.innerHTML = "<span></span><b></b>";
+    d.firstChild.textContent = (top > 0 && S.scores[p] === top ? "👑 " : "") + p;
+    d.lastChild.textContent = (S.scores[p] || 0) + " pts";
+    $("#scores").append(d);
+  });
+}
+
+// ---- audio ----
+const buffers = {};
+let ctx, stream, recorder, playing, micOk = !!navigator.mediaDevices?.getUserMedia;
+
+function audioCtx() {
+  ctx ??= new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === "suspended") ctx.resume(); // phones need a tap first
+  return ctx;
+}
+function reverse(buf) {
+  const out = ctx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
+  for (let c = 0; c < buf.numberOfChannels; c++) out.copyToChannel(buf.getChannelData(c).slice().reverse(), c);
+  return out;
+}
+function play(buf) {
+  try { playing?.stop(); } catch {}
+  playing = audioCtx().createBufferSource();
+  playing.buffer = buf; playing.connect(ctx.destination); playing.start();
+}
+async function store(slot, blob) {
+  try {
+    const normal = await audioCtx().decodeAudioData(await blob.arrayBuffer());
+    buffers[slot] = { normal, reversed: reverse(normal) };
+    $("#err").textContent = "";
+    if (slot === "original") { unlock("#s2"); unlock("#s3"); } else unlock("#s4");
+  } catch { $("#err").textContent = "No pude leer ese audio. Intenta grabarlo otra vez."; }
+}
+const unlock = id => $(id).classList.remove("off");
+
+// Each recorder box: live mic button, plus a phone-recorder file fallback when the mic is blocked.
+function buildRecorder(box) {
+  const slot = box.dataset.slot;
+  box.innerHTML = `<button class="rec">🎙️ Grabar</button>
+    <label class="filebtn rec" hidden>🎙️ Grabar con la grabadora del celular<input type="file" accept="audio/*" capture></label>`;
+  const btn = box.querySelector("button"), label = box.querySelector("label"), file = box.querySelector("input");
+  const fallback = () => { micOk = false; $$(".recorder button.rec").forEach(b => b.hidden = true); $$(".recorder label").forEach(l => l.hidden = false); };
+  if (!micOk) fallback();
+  file.onchange = () => { if (file.files[0]) { store(slot, file.files[0]); label.firstChild.textContent = "🎙️ Volver a grabar"; } file.value = ""; };
+  btn.onclick = async () => {
+    if (recorder?.state === "recording") return recorder.stop();
+    try { audioCtx(); stream ??= await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { fallback(); $("#err").textContent = "El micrófono está bloqueado aquí; usa la grabadora del celular."; return; }
+    const chunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.onstop = () => { btn.classList.remove("on"); btn.textContent = "🎙️ Volver a grabar"; store(slot, new Blob(chunks, { type: recorder.mimeType })); };
+    recorder.start();
+    btn.classList.add("on"); btn.textContent = "⏹️ Detener";
+  };
+}
+function resetAudio() {
+  try { playing?.stop(); } catch {}
+  if (recorder?.state === "recording") recorder.stop();
+  for (const k in buffers) delete buffers[k];
+  ["#s2", "#s3", "#s4"].forEach(id => $(id).classList.add("off"));
+  $$(".recorder").forEach(buildRecorder);
+}
+$$("[data-play]").forEach(b => b.onclick = () => {
+  const s = buffers[b.dataset.play];
+  if (s) play(b.dataset.rev === "1" ? s.reversed : s.normal);
+});
+
+renderPlayers();
+
+// self-check: reverse() flips sample order
+(() => {
+  const saved = ctx; ctx = new OfflineAudioContext(1, 3, 8000);
+  const b = ctx.createBuffer(1, 3, 8000); b.copyToChannel(new Float32Array([1, 2, 3]), 0);
+  console.assert(reverse(b).getChannelData(0).join() === "3,2,1", "reverse() broken");
+  ctx = saved;
+})();
+</script>
+
+</body>
+</html>
